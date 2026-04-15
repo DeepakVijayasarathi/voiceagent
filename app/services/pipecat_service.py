@@ -427,7 +427,7 @@ class RawPCMFrameSerializer(FrameSerializer):
 # Multilingual STT — whisper-1 with verbose_json for language detection
 # ---------------------------------------------------------------------------
 
-def _make_multilingual_stt(api_key: str):
+def _make_multilingual_stt(api_key: str, kb=None):
     """
     Whisper-1 STT with:
     • No language= → auto-detects Tamil/EN/HI/TE
@@ -438,9 +438,7 @@ def _make_multilingual_stt(api_key: str):
 
     class MultilingualWhisperSTT(OpenAISTTService):
         async def _transcribe(self, audio: bytes):
-            from app.services.knowledge_service import knowledge_base
-
-            domain_hint = knowledge_base.get_stt_hint()
+            domain_hint = kb.get_stt_hint() if kb and kb.is_loaded else ""
             kwargs: dict = {
                 "file":            ("audio.wav", audio, "audio/wav"),
                 "model":           "whisper-1",
@@ -490,6 +488,7 @@ async def run_voice_pipeline(
     session_id: str,
     agent,
     db,
+    tenant=None,
 ) -> None:
 
     try:
@@ -527,7 +526,7 @@ async def run_voice_pipeline(
         async def _call_agent(self, text: str, detected_lang: str | None) -> dict:
             loop = asyncio.get_running_loop()
             return await loop.run_in_executor(
-                None, agent.handle, session_id, text, detected_lang
+                None, agent.handle, session_id, text, detected_lang, tenant
             )
 
         async def _send_meta(self, result: dict, transcript: str = "") -> None:
@@ -615,7 +614,8 @@ async def run_voice_pipeline(
                     if reply:
                         await self.push_frame(TTSSpeakFrame(text=reply), FrameDirection.DOWNSTREAM)
                     if result.get("done"):
-                        db.save(result["lead"], session_id)
+                        tenant_id = tenant.tenant_id if tenant else "default"
+                        db.save(result["lead"], session_id, tenant_id)
                         await self.push_frame(EndFrame(), FrameDirection.DOWNSTREAM)
                 except Exception as exc:
                     logger.error("Agent call failed: {}", exc)
@@ -651,7 +651,7 @@ async def run_voice_pipeline(
         ),
     )
 
-    stt = _make_multilingual_stt(api_key)
+    stt = _make_multilingual_stt(api_key, kb=tenant.knowledge_base if tenant else None)
 
     # TTS starts with Tamil instructions (default language)
     tts = OpenAITTSService(

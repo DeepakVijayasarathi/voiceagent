@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, UploadFile, File, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, UploadFile, File, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse, Response, JSONResponse
@@ -8,8 +8,28 @@ import asyncio
 import concurrent.futures
 import logging
 
-from app.services.agent_service import AgentService, set_knowledge_base, set_company_info, get_company_info
-from app.services.knowledge_service import knowledge_base
+# ---------------------------------------------------------------------------
+# Phoenix tracing — instrument OpenAI calls
+# ---------------------------------------------------------------------------
+import phoenix as px
+from openinference.instrumentation.openai import OpenAIInstrumentor
+from opentelemetry import trace as _otel_trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk import trace as _otel_sdk
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+
+_phoenix_session = px.launch_app()
+_tracer_provider = _otel_sdk.TracerProvider()
+_tracer_provider.add_span_processor(
+    SimpleSpanProcessor(
+        OTLPSpanExporter(endpoint=f"{_phoenix_session.url}v1/traces")
+    )
+)
+_otel_trace.set_tracer_provider(_tracer_provider)
+OpenAIInstrumentor().instrument(tracer_provider=_tracer_provider)
+
+from app.services.agent_service import AgentService, get_company_info
+from app.services.tenant_service import TenantRegistry
 from app.services.db_service import DBService
 from app.services.audio_service import AudioService
 from app.services.pipecat_service import run_voice_pipeline
@@ -18,7 +38,9 @@ log = logging.getLogger(__name__)
 
 _CONFIG_PATH = Path(__file__).resolve().parent.parent / "agent.yaml"
 with open(_CONFIG_PATH, encoding="utf-8") as _f:
-    _AGENT_CFG = yaml.safe_load(_f)["agent"]
+    _FULL_CFG = yaml.safe_load(_f)
+
+_AGENT_CFG = _FULL_CFG.get("agent", {})
 
 app = FastAPI(title="Voice Sales Agent")
 
@@ -30,9 +52,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-agent = AgentService()
-db    = DBService()
-audio = AudioService()
+registry = TenantRegistry(_FULL_CFG)
+agent    = AgentService()
+db       = DBService()
+audio    = AudioService()
 
 _FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
 _POOL     = concurrent.futures.ThreadPoolExecutor()
@@ -49,11 +72,14 @@ async def _startup():
 
 
 # ---------------------------------------------------------------------------
-# PDF upload — extract text, inject into agent knowledge base
+# PDF upload — extract text, inject into tenant knowledge base
 # ---------------------------------------------------------------------------
 
 @app.post("/upload-pdf")
-async def upload_pdf(file: UploadFile = File(...)):
+async def upload_pdf(
+    file: UploadFile = File(...),
+    tenant_id: str = Query(default="default", description="Tenant to load the PDF into"),
+):
     if not file.filename.lower().endswith(".pdf"):
         return JSONResponse(status_code=400, content={"error": "Only PDF files are accepted"})
     try:
@@ -72,12 +98,14 @@ async def upload_pdf(file: UploadFile = File(...)):
         if not full_text:
             return JSONResponse(status_code=422, content={"error": "No readable text found in PDF"})
 
+        tenant = registry.get(tenant_id)
+
         # ── 1. Store raw text + build RAG index (embeddings) ──────────
-        set_knowledge_base(full_text)
+        tenant.pdf_text = full_text
         chunks_n = await asyncio.get_event_loop().run_in_executor(
-            _POOL, knowledge_base.ingest, full_text
+            _POOL, tenant.knowledge_base.ingest, full_text
         )
-        log.info("RAG index built: %d chunks", chunks_n)
+        log.info("RAG index built: %d chunks (tenant=%s)", chunks_n, tenant_id)
 
         # ── 2. Extract company info via GPT ────────────────────────────
         try:
@@ -103,19 +131,20 @@ async def upload_pdf(file: UploadFile = File(...)):
                 ),
             )
             company_info = _json.loads(resp.choices[0].message.content)
-            set_company_info(company_info)
-            log.info("Company info extracted from PDF: %s", company_info)
+            registry.update_company(tenant_id, company_info)
+            log.info("Company info extracted (tenant=%s): %s", tenant_id, company_info)
         except Exception as exc:
             log.warning("Company info extraction failed (using defaults): %s", exc)
 
         preview = full_text[:200].replace("\n", " ")
         return {
-            "status":  "ok",
-            "pages":   num_pages,
-            "chars":   len(full_text),
-            "chunks":  chunks_n,
-            "preview": preview,
-            "company": get_company_info(),
+            "status":    "ok",
+            "tenant_id": tenant_id,
+            "pages":     num_pages,
+            "chars":     len(full_text),
+            "chunks":    chunks_n,
+            "preview":   preview,
+            "company":   get_company_info(tenant),
         }
     except ImportError:
         return JSONResponse(status_code=500,
@@ -146,13 +175,15 @@ async def get_filler(lang: str):
 async def chat(req: Request):
     data       = await req.json()
     session_id = data.get("session_id", "default")
+    tenant_id  = data.get("tenant_id", "default")
     message    = data.get("message", "")
 
+    tenant = registry.get(tenant_id)
     result = await asyncio.get_event_loop().run_in_executor(
-        _POOL, agent.handle, session_id, message
+        _POOL, agent.handle, session_id, message, None, tenant
     )
     if result["done"]:
-        db.save(result["lead"], session_id)
+        db.save(result["lead"], session_id, tenant_id)
     return result
 
 
@@ -196,9 +227,13 @@ async def tts(req: Request):
 # ---------------------------------------------------------------------------
 
 @app.get("/config")
-async def get_config():
-    co = get_company_info()   # reflects PDF-extracted info once a PDF is uploaded
+async def get_config(
+    tenant_id: str = Query(default="default", description="Tenant ID"),
+):
+    tenant = registry.get(tenant_id)
+    co = get_company_info(tenant)
     return {
+        "tenant_id":  tenant_id,
         "company":    co.get("name",       "Sales Agent"),
         "tagline":    co.get("tagline",    ""),
         "agent_name": co.get("agent_name", "Priya"),
@@ -211,13 +246,23 @@ async def get_config():
 # ---------------------------------------------------------------------------
 
 @app.get("/leads")
-async def get_leads():
-    return db.get_all()
+async def get_leads(
+    tenant_id: str = Query(default="default", description="Tenant ID"),
+):
+    return db.get_all(tenant_id)
+
+
+@app.get("/tenants")
+async def list_tenants():
+    return {"tenants": registry.list_tenants()}
 
 
 @app.delete("/session/{session_id}")
-async def clear_session(session_id: str):
-    agent.clear_session(session_id)
+async def clear_session(
+    session_id: str,
+    tenant_id: str = Query(default="default", description="Tenant ID"),
+):
+    agent.clear_session(session_id, tenant_id)
     return {"status": "cleared"}
 
 
@@ -226,12 +271,17 @@ async def clear_session(session_id: str):
 # ---------------------------------------------------------------------------
 
 @app.websocket("/ws/voice")
-async def voice_websocket(websocket: WebSocket, session_id: str = "default"):
+async def voice_websocket(
+    websocket: WebSocket,
+    session_id: str = "default",
+    tenant_id: str = "default",
+):
     await websocket.accept()
+    tenant = registry.get(tenant_id)
     try:
-        await run_voice_pipeline(websocket, session_id, agent, db)
+        await run_voice_pipeline(websocket, session_id, agent, db, tenant)
     except WebSocketDisconnect:
-        log.info("WebSocket disconnected (session=%s)", session_id)
+        log.info("WebSocket disconnected (session=%s, tenant=%s)", session_id, tenant_id)
     except Exception as exc:
         log.error("Unhandled voice pipeline error (session=%s): %s", session_id, exc)
 

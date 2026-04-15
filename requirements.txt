@@ -7,3 +7,7 @@ python-multipart
 requests
 pipecat-ai[openai,silero]
 pdfplumber
+arize-phoenix
+openinference-instrumentation-openai
+opentelemetry-sdk
+opentelemetry-exporter-otlp

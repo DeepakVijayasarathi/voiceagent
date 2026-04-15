@@ -1,6 +1,6 @@
 agent:
   name: Voice Sales Agent
-  version: 3.0
+  version: 4.0
 
   company:
     name: "Sri Murugan Traders"
@@ -13,6 +13,40 @@ agent:
       - accessories
     location: "Madurai"
     agent_name: "Priya"
+
+# ---------------------------------------------------------------------------
+# Multi-tenant configuration
+# Each tenant inherits LLM settings from the "agent:" block above unless
+# explicitly overridden.  Add as many tenants as needed.
+# ---------------------------------------------------------------------------
+tenants:
+  # Example tenant — uncomment and customise to activate
+  # acme_tech:
+  #   company:
+  #     name: "Acme Tech Store"
+  #     tagline: "Chennai's top gadget hub"
+  #     agent_name: "Arun"
+  #     services:
+  #       - laptops
+  #       - desktops
+  #       - peripherals
+  #       - repairs
+  #     location: "Chennai"
+  #   llm:
+  #     model: gpt-4o
+  #     temperature: 0.60
+  #     max_tokens: 280
+
+  # xyz_mobiles:
+  #   company:
+  #     name: "XYZ Mobiles"
+  #     tagline: "Best phones in Coimbatore"
+  #     agent_name: "Divya"
+  #     services:
+  #       - mobile phones
+  #       - accessories
+  #       - screen repairs
+  #     location: "Coimbatore"
 
   llm:
     provider: openai

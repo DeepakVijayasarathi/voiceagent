@@ -25,8 +25,8 @@ log = logging.getLogger(__name__)
 # Chunker — paragraph-aware, with overlap
 # ---------------------------------------------------------------------------
 
-_CHUNK_CHARS    = 1_000   # ~250 tokens per chunk
-_CHUNK_OVERLAP  = 150     # chars of overlap between consecutive chunks
+_CHUNK_CHARS    = 1_500   # ~375 tokens per chunk — more context per chunk
+_CHUNK_OVERLAP  = 200     # chars of overlap between consecutive chunks
 
 
 def _split_chunks(text: str) -> list[str]:
@@ -78,8 +78,8 @@ class KnowledgeBase:
     """
 
     EMBED_MODEL  = "text-embedding-3-small"
-    TOP_K        = 5       # chunks to retrieve per query
-    MIN_SIM      = 0.30    # similarity threshold — below this ignore chunk
+    TOP_K        = 7       # chunks to retrieve per query
+    MIN_SIM      = 0.25    # similarity threshold — lower catches borderline-relevant chunks
 
     def __init__(self):
         self._chunks: list[str] = []
@@ -137,10 +137,23 @@ class KnowledgeBase:
     # Retrieve
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _keyword_overlap(query: str, chunk: str) -> float:
+        """
+        Fraction of query tokens (≥3 chars) that appear in the chunk.
+        Returns a score in [0, 1] to blend with cosine similarity.
+        """
+        q_tokens = {t.lower() for t in re.findall(r"\b\w{3,}\b", query)}
+        if not q_tokens:
+            return 0.0
+        c_lower = chunk.lower()
+        hits = sum(1 for t in q_tokens if t in c_lower)
+        return hits / len(q_tokens)
+
     def retrieve(self, query: str, top_k: int | None = None) -> list[str]:
         """
-        Return up to top_k most relevant chunks for query.
-        Returns [] if nothing is indexed or no chunk passes MIN_SIM.
+        Hybrid retrieval: cosine similarity (semantic) + keyword overlap (lexical).
+        Returns up to top_k most relevant chunks above MIN_SIM threshold.
         """
         if self._embeddings is None or not self._chunks:
             return []
@@ -154,15 +167,22 @@ class KnowledgeBase:
         q_vec  = np.array(q_resp.data[0].embedding, dtype=np.float32)
 
         # Cosine similarity
-        norms = np.linalg.norm(self._embeddings, axis=1) * np.linalg.norm(q_vec)
-        norms = np.where(norms == 0, 1e-9, norms)
-        sims  = (self._embeddings @ q_vec) / norms
+        norms  = np.linalg.norm(self._embeddings, axis=1) * np.linalg.norm(q_vec)
+        norms  = np.where(norms == 0, 1e-9, norms)
+        cosine = (self._embeddings @ q_vec) / norms
 
-        top_idx = np.argsort(sims)[::-1][:k]
+        # Hybrid score: 90 % semantic + 10 % keyword overlap
+        kw_scores = np.array(
+            [self._keyword_overlap(query, c) for c in self._chunks],
+            dtype=np.float32,
+        )
+        hybrid = 0.90 * cosine + 0.10 * kw_scores
+
+        top_idx = np.argsort(hybrid)[::-1][:k]
         return [
             self._chunks[i]
             for i in top_idx
-            if sims[i] >= self.MIN_SIM
+            if cosine[i] >= self.MIN_SIM   # gate on semantic sim, not hybrid
         ]
 
     def get_context(self, query: str) -> str:
@@ -222,7 +242,6 @@ def _extract_keywords(text: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# Global singleton
+# Note: KnowledgeBase instances are now created per-tenant in TenantConfig.
+# The global singleton is intentionally removed; use tenant.knowledge_base.
 # ---------------------------------------------------------------------------
-
-knowledge_base = KnowledgeBase()
