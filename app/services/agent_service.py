@@ -177,8 +177,10 @@ ENGLISH (warm, professional):
   Confirm:  "let me confirm — [name], [need], [phone], [budget] — is that correct?"
   Close:    "thank you so much, our team will call you shortly!"
 
-HINDI (Hinglish):  Fillers: "haan,", "bilkul,", "achha,", "theek hai,"
-TELUGU (Tenglish): Fillers: "sare,", "dhanyavaadaalu,", "okay,"
+HINDI (Hinglish):    Fillers: "haan,", "bilkul,", "achha,", "theek hai,"
+TELUGU (Tenglish):   Fillers: "sare,", "dhanyavaadaalu,", "okay,"
+KANNADA (Kanglish):  Fillers: "sari,", "houdu,", "okay,", "thumba thanks,"
+MALAYALAM (Manglish): Fillers: "ശരി (shari),", "okay,", "nandi,", "manasilaayi,"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PHONE VALIDATION
@@ -190,7 +192,7 @@ OUTPUT — ONLY valid JSON, no other text
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {{
   "reply":   "<one warm spoken sentence, filler start, max 20 words>",
-  "lang":    "<ta|en|hi|te — match customer's language>",
+  "lang":    "<ta|en|hi|te|kn|ml — match customer's language>",
   "emotion": "<interested|curious|hesitant|budget_concern|satisfied|neutral>",
   "phase":   "<greeting|explore|recommend|collect|confirm|close>",
   "lead": {{
@@ -315,7 +317,16 @@ class AgentService:
 
         # ── Detected language — inject IMMEDIATELY so reply switches this turn ──
         if detected_lang:
-            _LANG_NAMES = {"ta": "Tamil/Tanglish", "en": "English", "hi": "Hindi/Hinglish", "te": "Telugu/Tenglish"}
+            _LANG_NAMES = {
+                "ta": "Tamil/Tanglish",
+                "en": "English",
+                "hi": "Hindi/Hinglish",
+                "te": "Telugu/Tenglish",
+                "kn": "Kannada/Kanglish",
+                "ml": "Malayalam/Manglish",
+                "mr": "Marathi",
+                "bn": "Bengali",
+            }
             lang_name = _LANG_NAMES.get(detected_lang, detected_lang.upper())
             messages.insert(-1, {
                 "role": "system",

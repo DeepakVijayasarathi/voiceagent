@@ -39,6 +39,8 @@ _FILLER_PHRASES = {
     "en": "hmm, okay, one moment please.",
     "hi": "haan, ek second please.",
     "te": "sare, okka nimisham please.",
+    "kn": "sari, ondu nimisha please.",
+    "ml": "shari, oru nimisham please.",
 }
 
 

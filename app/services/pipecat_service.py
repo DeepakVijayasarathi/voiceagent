@@ -109,6 +109,25 @@ _TTS_INSTRUCTIONS: dict[str, str] = {
         "• Tenglish: Telugu sentence structure with English words — fluid and natural.\n"
         "Warm, professional Hyderabad call centre tone. Gentle rising intonation on questions."
     ),
+    "kn": (
+        "You are Priya, a warm Kannada-speaking Indian call centre agent from Bengaluru. "
+        "Pronunciation rules:\n"
+        "• Kannada retroflex consonants ಟ ಡ ಣ ಳ — tongue curves back to the hard palate.\n"
+        "• Short vs long vowels (ಅ/ಆ, ಇ/ಈ, ಉ/ಊ) — honour the length distinction clearly.\n"
+        "• Kannada 'ಳ' (ḷa) — retroflex lateral, distinct from regular 'la'.\n"
+        "• Kanglish: Kannada sentence structure with English words — fluid and natural.\n"
+        "Warm, professional Bengaluru call centre tone. Gentle rising intonation on questions."
+    ),
+    "ml": (
+        "You are Priya, a warm Malayalam-speaking Indian call centre agent from Kerala. "
+        "Pronunciation rules:\n"
+        "• Malayalam retroflex sounds ട ഡ ണ ള — tongue curls back firmly.\n"
+        "• The unique 'ഴ' (zha) — deep retroflex approximant, like Tamil 'ழ'.\n"
+        "• Long vowels ആ ഈ ഊ — noticeably longer than short counterparts.\n"
+        "• Consonant clusters like 'ksh', 'ndr', 'ttr' — articulate each element.\n"
+        "• Manglish: Malayalam sentence rhythm with English vocabulary, Kerala accent.\n"
+        "Warm, melodic Kerala tone. Gentle rising intonation on questions."
+    ),
     # Fallback for any unrecognised language
     "_default": (
         "You are Priya, a warm and knowledgeable Indian call centre agent. "
@@ -168,16 +187,190 @@ def _is_valid_transcript(text: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Tanglish → phonetic spelling map
+# Helps gpt-4o-tts pronounce Tanglish words correctly.
+# Keys are lowercase; replacement is a phonetic hint the TTS reads naturally.
+# ---------------------------------------------------------------------------
+
+_TANGLISH_PHONETICS: dict[str, str] = {
+    "seri":        "say-ri",
+    "sari":        "say-ri",
+    "sollunga":    "sol-lunn-ga",
+    "sollu":       "sol-lu",
+    "unga":        "unn-ga",
+    "unnga":       "unn-ga",
+    "neenga":      "neeng-a",
+    "puriyuthu":   "pu-ri-yu-thu",
+    "puriyuma":    "pu-ri-yu-ma",
+    "enna":        "en-na",
+    "enga":        "eng-a",
+    "vanakam":     "va-na-kam",
+    "eppadi":      "ep-pa-di",
+    "romba":       "rom-ba",
+    "konjam":      "kon-jam",
+    "pannunga":    "pan-nunn-ga",
+    "pannu":       "pan-nu",
+    "parunga":     "pa-runn-ga",
+    "paaru":       "paa-ru",
+    "theriyuma":   "the-ri-yu-ma",
+    "theriyuthu":  "the-ri-yu-thu",
+    "illa":        "il-la",
+    "illai":       "il-lai",
+    "aama":        "aa-ma",
+    "appo":        "ap-po",
+    "intha":       "in-tha",
+    "antha":       "an-tha",
+    "vanga":       "vann-ga",
+    "poonga":      "poon-ga",
+    "kelunga":     "ke-lunn-ga",
+    "kelu":        "ke-lu",
+    "pesalama":    "pe-sa-la-ma",
+    "pesunga":     "pe-sunn-ga",
+    "nalla":       "nal-la",
+    "super":       "soo-per",
+    "venum":       "ve-num",
+    "vendam":      "ven-dam",
+}
+
+# Regex built once: matches whole words only, case-insensitive
+_TANGLISH_RE = re.compile(
+    r'\b(' + '|'.join(re.escape(k) for k in _TANGLISH_PHONETICS) + r')\b',
+    re.IGNORECASE,
+)
+
+
+def _apply_tanglish_phonetics(text: str) -> str:
+    """Replace known Tanglish words with phonetic spellings for better TTS."""
+    def _replace(m: re.Match) -> str:
+        return _TANGLISH_PHONETICS[m.group(0).lower()]
+    return _TANGLISH_RE.sub(_replace, text)
+
+
+# ---------------------------------------------------------------------------
+# Hinglish → phonetic spelling map
+# ---------------------------------------------------------------------------
+
+_HINGLISH_PHONETICS: dict[str, str] = {
+    "achha":      "ach-haa",
+    "achcha":     "ach-chaa",
+    "bilkul":     "bil-kul",
+    "chahiye":    "cha-hi-ye",
+    "bataiye":    "ba-taa-i-ye",
+    "batao":      "ba-tao",
+    "boliye":     "bo-li-ye",
+    "kijiye":     "ki-ji-ye",
+    "zaroor":     "za-roor",
+    "jaroor":     "za-roor",
+    "samajh":     "sa-majh",
+    "zyada":      "zyaa-da",
+    "thoda":      "tho-da",
+    "bahut":      "ba-hut",
+    "nahi":       "na-hi",
+    "nahin":      "na-hin",
+    "aapka":      "aap-ka",
+    "aapki":      "aap-ki",
+    "aapke":      "aap-ke",
+    "humara":     "hu-maa-ra",
+    "hamare":     "ha-maa-re",
+    "shukriya":   "shuk-ri-ya",
+    "dhanyavaad": "dhan-ya-vaad",
+    "abhi":       "ab-hi",
+    "pehle":      "peh-le",
+    "matlab":     "mat-lab",
+    "waise":      "wai-se",
+    "shaayad":    "shaay-ad",
+    "theek":      "theek",
+    "zaruri":     "za-roo-ri",
+    "suniye":     "su-ni-ye",
+    "dekhiye":    "dekh-i-ye",
+    "lijiye":     "li-ji-ye",
+    "dijiye":     "di-ji-ye",
+    "karo":       "ka-ro",
+    "kariye":     "ka-ri-ye",
+    "haan":       "haan",
+    "isko":       "is-ko",
+    "usko":       "us-ko",
+    "inka":       "in-ka",
+}
+
+_HINGLISH_RE = re.compile(
+    r'\b(' + '|'.join(re.escape(k) for k in _HINGLISH_PHONETICS) + r')\b',
+    re.IGNORECASE,
+)
+
+
+def _apply_hinglish_phonetics(text: str) -> str:
+    def _replace(m: re.Match) -> str:
+        return _HINGLISH_PHONETICS[m.group(0).lower()]
+    return _HINGLISH_RE.sub(_replace, text)
+
+
+# ---------------------------------------------------------------------------
+# Tenglish → phonetic spelling map
+# ---------------------------------------------------------------------------
+
+_TENGLISH_PHONETICS: dict[str, str] = {
+    "sare":        "saa-re",
+    "cheppandi":   "chep-pan-di",
+    "cheyyandi":   "chey-yan-di",
+    "chudandi":    "chu-dan-di",
+    "raandi":      "raan-di",
+    "vellaali":    "vel-laa-li",
+    "kavali":      "ka-va-li",
+    "meeru":       "mee-ru",
+    "mee":         "mee",
+    "nenu":        "ne-nu",
+    "evaru":       "e-va-ru",
+    "emiti":       "e-mi-ti",
+    "emi":         "e-mi",
+    "ikkade":      "ik-ka-de",
+    "akkade":      "ak-ka-de",
+    "chesaanu":    "che-saa-nu",
+    "chesaama":    "che-saa-ma",
+    "annaru":      "an-na-ru",
+    "thelusaa":    "the-lu-saa",
+    "thelusundi":  "the-lu-sun-di",
+    "dhanyavaadaalu": "dhan-ya-vaa-daa-lu",
+    "okka":        "ok-ka",
+    "nimisham":    "ni-mi-sham",
+    "pedda":       "ped-da",
+    "chinna":      "chin-na",
+    "nalla":       "nal-la",
+    "baagundi":    "baa-gun-di",
+    "ledu":        "le-du",
+    "undi":        "un-di",
+    "ayindi":      "a-yin-di",
+}
+
+_TENGLISH_RE = re.compile(
+    r'\b(' + '|'.join(re.escape(k) for k in _TENGLISH_PHONETICS) + r')\b',
+    re.IGNORECASE,
+)
+
+
+def _apply_tenglish_phonetics(text: str) -> str:
+    def _replace(m: re.Match) -> str:
+        return _TENGLISH_PHONETICS[m.group(0).lower()]
+    return _TENGLISH_RE.sub(_replace, text)
+
+
+# ---------------------------------------------------------------------------
 # TTS text cleaner
 # ---------------------------------------------------------------------------
 
-def _clean_for_tts(text: str) -> str:
+def _clean_for_tts(text: str, lang: str = "ta") -> str:
     text = re.sub(r'\*+', '', text)
     text = re.sub(r'#+\s*', '', text)
     text = re.sub(r'\[.*?\]\(.*?\)', '', text)
     text = text.replace('...', ', ')
     text = re.sub(r',\s*,+', ',', text)
     text = re.sub(r'\s+', ' ', text).strip()
+    if lang == "ta":
+        text = _apply_tanglish_phonetics(text)
+    elif lang == "hi":
+        text = _apply_hinglish_phonetics(text)
+    elif lang == "te":
+        text = _apply_tenglish_phonetics(text)
     if text and text[-1] not in '.?!':
         text += '.'
     return text
@@ -362,7 +555,7 @@ async def run_voice_pipeline(
                 try:
                     result = await self._call_agent("__start__", None)
                     await self._send_meta(result)
-                    reply = _clean_for_tts(result.get("reply", ""))
+                    reply = _clean_for_tts(result.get("reply", ""), lang=_session_lang["lang"])
                     if reply:
                         await self.push_frame(TTSSpeakFrame(text=reply), FrameDirection.DOWNSTREAM)
                 except Exception as exc:
@@ -396,7 +589,11 @@ async def run_voice_pipeline(
                         new_instr = _get_tts_instructions(detected_lang)
                         try:
                             await tts._update_settings(
-                                OpenAITTSService.Settings(instructions=new_instr)
+                                OpenAITTSService.Settings(
+                                    model="gpt-4o-tts",
+                                    voice="shimmer",
+                                    instructions=new_instr,
+                                )
                             )
                             logger.info("TTS instructions updated → {}", detected_lang)
                         except Exception as e:
@@ -414,7 +611,7 @@ async def run_voice_pipeline(
                     if agent_lang and agent_lang != _session_lang["lang"]:
                         _session_lang["lang"] = agent_lang
 
-                    reply = _clean_for_tts(result.get("reply", ""))
+                    reply = _clean_for_tts(result.get("reply", ""), lang=agent_lang)
                     if reply:
                         await self.push_frame(TTSSpeakFrame(text=reply), FrameDirection.DOWNSTREAM)
                     if result.get("done"):
@@ -460,8 +657,8 @@ async def run_voice_pipeline(
     tts = OpenAITTSService(
         api_key=api_key,
         settings=OpenAITTSService.Settings(
-            model="gpt-4o-mini-tts",
-            voice="nova",
+            model="gpt-4o-tts",
+            voice="shimmer",
             instructions=_get_tts_instructions("ta"),
         ),
     )

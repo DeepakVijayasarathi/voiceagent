@@ -70,6 +70,8 @@ agent:
       - ta
       - hi
       - te
+      - kn
+      - ml
 
     detection:
       method: ai
