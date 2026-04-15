@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voice Sales Agent</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0a0d14;
+      color: #e2e8f0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Phone call header ── */
+    header {
+      background: #111827;
+      border-bottom: 1px solid #1e2535;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .company-info { display: flex; flex-direction: column; gap: 2px; }
+    .company-name { font-size: 1rem; font-weight: 700; color: #f1f5f9; }
+    .company-tag  { font-size: .7rem; color: #64748b; }
+    .call-meta    { display: flex; align-items: center; gap: 12px; }
+    .badges       { display: flex; gap: 6px; }
+    .badge {
+      font-size: .65rem; font-weight: 700;
+      padding: 3px 9px; border-radius: 999px;
+      text-transform: uppercase; letter-spacing: .5px;
+    }
+    #lang-badge    { background: #1e3a5f; color: #60a5fa; }
+    #emotion-badge { background: #1a2e1a; color: #4ade80; }
+    #phase-badge   { background: #2d1f4f; color: #a78bfa; }
+
+    /* call timer */
+    #call-timer {
+      font-size: .75rem; font-weight: 600;
+      color: #4ade80; letter-spacing: 1px;
+      font-variant-numeric: tabular-nums;
+    }
+    #call-timer.ringing { color: #f59e0b; animation: blink .8s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* ── Setup / onboarding screen ── */
+    #setup-screen {
+      position: fixed; inset: 0; z-index: 200;
+      background: #0a0d14;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .setup-card {
+      background: #111827; border: 1px solid #1e2535; border-radius: 18px;
+      padding: 36px 32px; width: 100%; max-width: 440px; text-align: center;
+    }
+    .setup-icon { font-size: 3rem; margin-bottom: 10px; }
+    .setup-title { font-size: 1.35rem; font-weight: 700; color: #f1f5f9; margin-bottom: 6px; }
+    .setup-sub   { font-size: .8rem; color: #64748b; margin-bottom: 24px; line-height: 1.5; }
+    .setup-upload-zone {
+      border: 2px dashed #334155; border-radius: 12px;
+      padding: 22px 16px; cursor: pointer; transition: border-color .2s, background .2s;
+      margin-bottom: 12px;
+    }
+    .setup-upload-zone:hover { border-color: #3b82f6; background: #0f172a; }
+    .setup-upload-zone.loaded { border-color: #16a34a; background: #0a1f0f; }
+    .setup-upload-icon { font-size: 1.6rem; margin-bottom: 6px; }
+    .setup-upload-text { font-size: .82rem; color: #94a3b8; }
+    #setup-company-preview {
+      background: #0f172a; border: 1px solid #1e3a5f; border-radius: 10px;
+      padding: 12px 16px; margin-bottom: 16px; text-align: left; display: none;
+    }
+    .setup-co-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .setup-co-label { font-size: .65rem; color: #475569; text-transform: uppercase; letter-spacing: .5px; width: 68px; }
+    .setup-co-val   { font-size: .82rem; color: #e2e8f0; font-weight: 600; }
+    .setup-start-btn {
+      width: 100%; padding: 14px; border-radius: 10px; border: none;
+      background: linear-gradient(135deg, #1d4ed8, #7c3aed);
+      color: #fff; font-size: .95rem; font-weight: 700;
+      cursor: pointer; transition: opacity .15s; margin-bottom: 8px;
+    }
+    .setup-start-btn:hover { opacity: .9; }
+    .setup-skip-btn {
+      background: none; border: none; color: #475569; font-size: .75rem;
+      cursor: pointer; text-decoration: underline;
+    }
+    .setup-skip-btn:hover { color: #94a3b8; }
+    #setup-pdf-status { font-size: .72rem; margin-top: 6px; min-height: 16px; }
+
+    /* ── Call screen (before call starts) ── */
+    #call-screen {
+      position: fixed; inset: 0;
+      background: #0a0d14;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 20px; z-index: 100;
+    }
+    .avatar-ring {
+      position: relative;
+      width: 110px; height: 110px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .avatar-ring::before, .avatar-ring::after {
+      content: '';
+      position: absolute; inset: 0;
+      border-radius: 50%;
+      border: 2px solid #16a34a;
+      animation: ring 1.6s ease-out infinite;
+    }
+    .avatar-ring::after { animation-delay: .8s; }
+    @keyframes ring {
+      0%   { transform: scale(1);   opacity: .8; }
+      100% { transform: scale(1.7); opacity: 0; }
+    }
+    .avatar {
+      width: 80px; height: 80px; border-radius: 50%;
+      background: linear-gradient(135deg, #1d4ed8, #7c3aed);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2rem; position: relative; z-index: 1;
+    }
+    #cs-company { font-size: 1.2rem; font-weight: 700; color: #f1f5f9; }
+    #cs-agent   { font-size: .85rem; color: #94a3b8; }
+    #cs-status  { font-size: .78rem; color: #4ade80; letter-spacing: .5px; }
+    .answer-btn {
+      margin-top: 10px;
+      width: 64px; height: 64px; border-radius: 50%; border: none;
+      background: #16a34a; color: #fff; font-size: 1.6rem;
+      cursor: pointer; animation: pulse-green 1.2s infinite;
+      display: flex; align-items: center; justify-content: center;
+    }
+    @keyframes pulse-green {
+      0%   { box-shadow: 0 0 0 0   rgba(22,163,74,.6); }
+      70%  { box-shadow: 0 0 0 20px rgba(22,163,74,0); }
+      100% { box-shadow: 0 0 0 0   rgba(22,163,74,0); }
+    }
+
+    /* ── Layout ── */
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 272px;
+      overflow: hidden;
+    }
+
+    /* ── Chat pane ── */
+    .chat-pane {
+      display: flex; flex-direction: column;
+      border-right: 1px solid #1e2535;
+      overflow: hidden;
+    }
+    #transcript {
+      flex: 1; overflow-y: auto;
+      padding: 16px 18px 8px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    #transcript::-webkit-scrollbar { width: 3px; }
+    #transcript::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 3px; }
+
+    .bubble-wrap { display: flex; flex-direction: column; }
+    .bubble-wrap.user { align-items: flex-end; }
+    .bubble-label {
+      font-size: .62rem; font-weight: 700; color: #475569;
+      margin-bottom: 3px; text-transform: uppercase; letter-spacing: .5px;
+    }
+    .bubble {
+      max-width: 78%; padding: 10px 14px;
+      border-radius: 16px; font-size: .88rem; line-height: 1.55;
+      animation: pop .2s ease;
+    }
+    @keyframes pop { from{opacity:0;transform:translateY(4px) scale(.97)} to{opacity:1;transform:none} }
+    .bubble.agent { background: #1e2535; border-bottom-left-radius: 4px; }
+    .bubble.user  { background: #1d4ed8; color:#fff; border-bottom-right-radius: 4px; }
+
+    /* ── Visualiser ── */
+    #visualiser {
+      height: 32px; padding: 0 18px;
+      display: flex; align-items: center; gap: 2px; flex-shrink: 0;
+    }
+    .bar { width: 3px; border-radius: 2px; background: #1e2535; }
+
+    /* ── Interim ── */
+    #interim-wrap {
+      min-height: 20px; padding: 0 18px;
+      font-size: .78rem; color: #475569; font-style: italic; flex-shrink: 0;
+    }
+
+    /* ── Controls ── */
+    .controls {
+      padding: 14px 18px 18px;
+      display: flex; flex-direction: column;
+      align-items: center; gap: 10px;
+      border-top: 1px solid #1e2535; flex-shrink: 0;
+    }
+
+    /* mic + end-call row */
+    .btn-row { display: flex; gap: 24px; align-items: center; }
+
+    #mic-btn {
+      width: 60px; height: 60px; border-radius: 50%; border: none;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; transition: transform .12s, background .2s;
+      background: #1d4ed8;
+    }
+    #mic-btn:hover:not(:disabled) { transform: scale(1.07); }
+    #mic-btn:disabled { opacity: .4; cursor: not-allowed; }
+    #mic-btn.s-idle      { background: #1d4ed8; }
+    #mic-btn.s-listening { background: #dc2626; animation: pulse-red 1.3s infinite; }
+    #mic-btn.s-thinking  { background: #92400e; }
+    #mic-btn.s-speaking  { background: #065f46; }
+    #mic-btn.s-done      { background: #1e2535; }
+    @keyframes pulse-red {
+      0%   { box-shadow:0 0 0 0   rgba(220,38,38,.55); }
+      70%  { box-shadow:0 0 0 16px rgba(220,38,38,0); }
+      100% { box-shadow:0 0 0 0   rgba(220,38,38,0); }
+    }
+
+    #end-btn {
+      width: 52px; height: 52px; border-radius: 50%; border: none;
+      background: #dc2626; color: #fff; font-size: 1.3rem;
+      cursor: pointer; transition: transform .12s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #end-btn:hover { transform: scale(1.07); }
+
+    #status-lbl {
+      font-size: .72rem; color: #64748b;
+      text-transform: uppercase; letter-spacing: .5px;
+    }
+
+    /* ── Done banner ── */
+    #done-banner {
+      display: none;
+      background: #14532d; color: #4ade80;
+      text-align: center; padding: 8px;
+      font-size: .8rem; font-weight: 600;
+      border-top: 1px solid #166534; flex-shrink: 0;
+    }
+
+    /* ── Lead pane ── */
+    .lead-pane {
+      padding: 16px 14px;
+      display: flex; flex-direction: column; gap: 12px;
+      overflow-y: auto;
+    }
+    .lead-pane h2 {
+      font-size: .7rem; font-weight: 700;
+      color: #64748b; text-transform: uppercase; letter-spacing: .7px;
+    }
+    .lead-card {
+      background: #111827; border: 1px solid #1e2535;
+      border-radius: 12px; padding: 13px;
+      display: flex; flex-direction: column; gap: 11px;
+    }
+    .lf { display: flex; flex-direction: column; gap: 3px; }
+    .lf label {
+      font-size: .6rem; font-weight: 700;
+      color: #475569; text-transform: uppercase; letter-spacing: .5px;
+    }
+    .lf span { font-size: .85rem; }
+    .lf span.empty { color: #1e2535; }
+
+
+    #new-btn {
+      margin-top: auto; padding: 9px;
+      border-radius: 8px; border: 1px solid #1e2535;
+      background: transparent; color: #64748b;
+      font-size: .78rem; cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+    #new-btn:hover { background: #1e2535; color: #e2e8f0; }
+  </style>
+</head>
+<body>
+
+<!-- ── Setup / Onboarding screen (shown first) ── -->
+<div id="setup-screen">
+  <div class="setup-card">
+    <div class="setup-icon">🤖</div>
+    <div class="setup-title">Voice AI Sales Agent</div>
+    <div class="setup-sub">Upload your company PDF so the agent knows your products, pricing and policies. Then start the call.</div>
+
+    <label class="setup-upload-zone" id="setup-upload-zone" for="setup-pdf-input">
+      <div class="setup-upload-icon" id="setup-upload-icon">📄</div>
+      <div class="setup-upload-text" id="setup-upload-text">Click to upload company PDF</div>
+      <input type="file" id="setup-pdf-input" accept=".pdf" style="display:none">
+    </label>
+    <div id="setup-pdf-status"></div>
+
+    <div id="setup-company-preview">
+      <div class="setup-co-row"><span class="setup-co-label">Company</span><span class="setup-co-val" id="setup-co-name">—</span></div>
+      <div class="setup-co-row"><span class="setup-co-label">Agent</span><span class="setup-co-val" id="setup-co-agent">—</span></div>
+      <div class="setup-co-row"><span class="setup-co-label">Services</span><span class="setup-co-val" id="setup-co-services">—</span></div>
+    </div>
+
+    <button class="setup-start-btn" id="setup-start-btn">Start Call →</button>
+    <br>
+    <button class="setup-skip-btn" id="setup-skip-btn">Skip — use default config</button>
+  </div>
+</div>
+
+<!-- ── Incoming call screen ── -->
+<div id="call-screen" style="display:none">
+  <div class="avatar-ring">
+    <div class="avatar">👩</div>
+  </div>
+  <div id="cs-company">Loading...</div>
+  <div id="cs-agent">Sales Agent</div>
+  <div id="cs-status">Incoming call...</div>
+  <button class="answer-btn" id="answer-btn" title="Answer">📞</button>
+</div>
+
+<header>
+  <div class="company-info">
+    <div class="company-name" id="h-company">Loading...</div>
+    <div class="company-tag"  id="h-tagline"></div>
+  </div>
+  <div class="call-meta">
+    <div class="badges">
+      <span class="badge" id="lang-badge">TA</span>
+      <span class="badge" id="emotion-badge">Neutral</span>
+      <span class="badge" id="phase-badge">Greeting</span>
+    </div>
+    <div id="call-timer" class="ringing">00:00</div>
+  </div>
+</header>
+
+<main>
+  <!-- Left: conversation -->
+  <div class="chat-pane">
+    <div id="transcript"></div>
+    <div id="visualiser"></div>
+    <div id="interim-wrap"></div>
+    <div id="done-banner">✓ Lead captured — our team will follow up!</div>
+    <div class="controls">
+      <div class="btn-row">
+        <button id="mic-btn" class="s-idle" title="Click to speak / stop">🎤</button>
+        <button id="end-btn" title="End call">📵</button>
+      </div>
+      <div id="status-lbl">On call</div>
+    </div>
+  </div>
+
+  <!-- Right: lead panel -->
+  <div class="lead-pane">
+    <h2>Lead</h2>
+    <div class="lead-card">
+      <div class="lf"><label>Name</label>       <span id="l-name"   class="empty">—</span></div>
+      <div class="lf"><label>Requirement</label><span id="l-req"    class="empty">—</span></div>
+      <div class="lf"><label>Phone</label>      <span id="l-phone"  class="empty">—</span></div>
+      <div class="lf"><label>Budget</label>     <span id="l-budget" class="empty">—</span></div>
+    </div>
+    <button id="new-btn">↺ New Call</button>
+
+    <!-- PDF Knowledge Base Upload -->
+    <div style="margin-top:16px; border-top:1px solid #1e2535; padding-top:14px;">
+      <div style="font-size:.6rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Knowledge Base</div>
+      <label id="pdf-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;border:1px dashed #334155;border-radius:8px;transition:border-color .15s;" title="Upload product PDF">
+        <span style="font-size:1.1rem;">📄</span>
+        <span id="pdf-name" style="font-size:.75rem;color:#64748b;">Upload PDF</span>
+        <input type="file" id="pdf-input" accept=".pdf" style="display:none;">
+      </label>
+      <div id="pdf-status" style="font-size:.68rem;color:#4ade80;margin-top:5px;display:none;"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ═══════════════════════════════════════════════════
+// Pipecat WebSocket voice client
+// Streams 16 kHz / 16-bit PCM mic audio to /ws/voice
+// and plays back WAV audio returned by the pipeline.
+// Falls back to REST mode if the WebSocket cannot connect.
+// ═══════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AudioWorklet — 16-bit PCM capture with:
+//   • Noise gate   : only sends frames with RMS above -52 dB (no background hiss)
+//   • Mic gate     : main thread sends {type:'gate',open:false} to mute during TTS
+// ─────────────────────────────────────────────────────────────────────────────
+const _PCM_WORKLET = `
+class PCMProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this._buf  = new Float32Array(512);
+    this._pos  = 0;
+    this._gate = true;   // false while agent is speaking
+    this.port.onmessage = (e) => {
+      if (e.data && e.data.type === 'gate') this._gate = e.data.open;
+    };
+  }
+  process(inputs) {
+    const ch = inputs[0] && inputs[0][0];
+    if (!ch) return true;
+    for (let i = 0; i < ch.length; i++) {
+      this._buf[this._pos++] = ch[i];
+      if (this._pos >= 512) {
+        if (this._gate) {
+          // Noise gate: RMS threshold ~-52 dB — suppress background hiss
+          let rms = 0;
+          for (let j = 0; j < 512; j++) rms += this._buf[j] * this._buf[j];
+          rms = Math.sqrt(rms / 512);
+          if (rms > 0.0025) {
+            const i16 = new Int16Array(512);
+            for (let j = 0; j < 512; j++) {
+              const v = Math.max(-1, Math.min(1, this._buf[j]));
+              i16[j] = v < 0 ? v * 32768 : v * 32767;
+            }
+            this.port.postMessage(i16.buffer, [i16.buffer]);
+          }
+        }
+        this._pos = 0;
+      }
+    }
+    return true;
+  }
+}
+registerProcessor('pcm-processor', PCMProcessor);
+`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PipecatVoiceClient — WebSocket voice pipeline client
+//
+// Key fixes vs previous version:
+//   1. getUserMedia with echoCancellation + noiseSuppression + autoGainControl
+//      → browser removes speaker echo before it even reaches the worklet
+//   2. _agentSpeaking flag + worklet gate message
+//      → mic is muted while TTS is playing, re-opens 400ms after playback ends
+//   3. AudioWorklet noise gate (RMS threshold)
+//      → background noise below -52 dB is never sent to Whisper
+// ─────────────────────────────────────────────────────────────────────────────
+class PipecatVoiceClient {
+  constructor(sessionId, onMetadata) {
+    this.sessionId      = sessionId;
+    this.onMetadata     = onMetadata;
+    this.ws             = null;
+    this.audioCtx       = null;   // 16 kHz capture
+    this.playbackCtx    = null;   // TTS playback
+    this.micStream      = null;
+    this._workletNode   = null;   // AudioWorkletNode (for gate messages)
+    this._queue         = [];
+    this._busy          = false;
+    this._scheduleAt    = 0;
+    this._agentSpeaking = false;  // true while TTS audio is queued/playing
+    this._openMicTimer  = null;   // timeout handle to re-open mic
+  }
+
+  async connect() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const url   = `${proto}//${location.host}/ws/voice?session_id=${encodeURIComponent(this.sessionId)}`;
+    this.ws = new WebSocket(url);
+    this.ws.binaryType = 'arraybuffer';
+    return new Promise((resolve, reject) => {
+      this.ws.onopen    = () => this._startMic().then(resolve).catch(reject);
+      this.ws.onerror   = () => reject(new Error('WebSocket error'));
+      this.ws.onclose   = () => this._onClose();
+      this.ws.onmessage = (e) => this._onMessage(e);
+    });
+  }
+
+  async _startMic() {
+    // Echo cancellation + noise suppression at browser level (before AudioWorklet)
+    this.micStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation:  true,   // removes TTS speaker output from mic
+        noiseSuppression:  true,   // removes background hiss
+        autoGainControl:   true,   // normalises mic volume
+        channelCount:      1,
+        sampleRate:        16000,
+      },
+      video: false,
+    });
+
+    this.audioCtx    = new AudioContext({ sampleRate: 16000 });
+    this.playbackCtx = new AudioContext();
+    this._scheduleAt = 0;
+
+    const blob = new Blob([_PCM_WORKLET], { type: 'application/javascript' });
+    const burl = URL.createObjectURL(blob);
+    await this.audioCtx.audioWorklet.addModule(burl);
+    URL.revokeObjectURL(burl);
+
+    const src  = this.audioCtx.createMediaStreamSource(this.micStream);
+    const node = new AudioWorkletNode(this.audioCtx, 'pcm-processor');
+    this._workletNode = node;
+
+    node.port.onmessage = (e) => {
+      // Only send to server when mic is open (not during agent speech)
+      if (!this._agentSpeaking && this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(e.data);
+      }
+    };
+    src.connect(node);
+    // NOT connected to destination — no feedback loop
+  }
+
+  // ── Close mic: mute worklet + set flag ──────────────────────────────────
+  _closeMic() {
+    if (this._openMicTimer) { clearTimeout(this._openMicTimer); this._openMicTimer = null; }
+    this._agentSpeaking = true;
+    if (this._workletNode) this._workletNode.port.postMessage({ type: 'gate', open: false });
+  }
+
+  // ── Open mic: 400ms after TTS ends so echo dies away ────────────────────
+  _openMicDelayed() {
+    if (this._openMicTimer) clearTimeout(this._openMicTimer);
+    this._openMicTimer = setTimeout(() => {
+      this._agentSpeaking = false;
+      if (this._workletNode) this._workletNode.port.postMessage({ type: 'gate', open: true });
+      this._openMicTimer = null;
+    }, 400);
+  }
+
+  _onMessage(event) {
+    if (event.data instanceof ArrayBuffer) {
+      // Binary = TTS audio → mute mic immediately
+      this._closeMic();
+      this._queue.push(event.data);
+      this._drainQueue();
+    } else {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'agent_data' && this.onMetadata) this.onMetadata(msg);
+      } catch {}
+    }
+  }
+
+  async _drainQueue() {
+    if (this._busy) return;
+    this._busy = true;
+    try {
+      while (this._queue.length) {
+        await this._scheduleChunk(this._queue.shift());
+      }
+    } finally {
+      this._busy = false;
+    }
+    if (this._queue.length) {
+      this._drainQueue();
+    } else {
+      // Queue empty — schedule mic re-open after playback + 400ms buffer
+      const ctx      = this.playbackCtx;
+      const remaining = ctx ? Math.max(0, this._scheduleAt - ctx.currentTime) : 0;
+      if (this._openMicTimer) clearTimeout(this._openMicTimer);
+      this._openMicTimer = setTimeout(() => {
+        this._agentSpeaking = false;
+        if (this._workletNode) this._workletNode.port.postMessage({ type: 'gate', open: true });
+        this._openMicTimer = null;
+      }, Math.round(remaining * 1000) + 400);
+    }
+  }
+
+  async _scheduleChunk(data) {
+    const ctx = this.playbackCtx;
+    if (!ctx) return;
+    try {
+      if (ctx.state === 'suspended') await ctx.resume();
+      const buffer  = await ctx.decodeAudioData(data.slice(0));
+      const src     = ctx.createBufferSource();
+      src.buffer    = buffer;
+      src.connect(ctx.destination);
+      const startAt = Math.max(ctx.currentTime + 0.04, this._scheduleAt);
+      src.start(startAt);
+      this._scheduleAt = startAt + buffer.duration;
+    } catch (e) {
+      console.error('[PC] decode/schedule error:', e);
+    }
+  }
+
+  _onClose() { this.cleanup(); }
+
+  cleanup() {
+    if (this._openMicTimer) { clearTimeout(this._openMicTimer); this._openMicTimer = null; }
+    if (this.micStream)    { this.micStream.getTracks().forEach(t => t.stop()); this.micStream = null; }
+    if (this.audioCtx)    { this.audioCtx.close().catch(()=>{}); this.audioCtx = null; }
+    if (this.playbackCtx) { this.playbackCtx.close().catch(()=>{}); this.playbackCtx = null; }
+    if (this.ws && this.ws.readyState < 2) this.ws.close();
+    this.ws = null; this._workletNode = null;
+    this._queue = []; this._busy = false; this._scheduleAt = 0;
+    this._agentSpeaking = false;
+  }
+}
+
+// Global Pipecat client instance (set when call is answered)
+let pcClient = null;
+
+// ═══════════════════════════════════════════════════
+// Config
+// ═══════════════════════════════════════════════════
+let CFG = { company: 'Sales Agent', tagline: '', agent_name: 'Priya', location: '' };
+
+async function loadConfig() {
+  try {
+    const r = await fetch('/config');
+    CFG = await r.json();
+    document.getElementById('cs-company').textContent = CFG.company;
+    document.getElementById('cs-agent').textContent   = `Agent: ${CFG.agent_name}`;
+    document.getElementById('h-company').textContent  = CFG.company;
+    document.getElementById('h-tagline').textContent  = CFG.tagline;
+    document.title = CFG.company;
+  } catch {}
+}
+
+// ═══════════════════════════════════════════════════
+// Session
+// ═══════════════════════════════════════════════════
+let sessionId   = makeId();
+let sessionDone = false;
+let lastLang    = 'ta';   // track language for correct filler sound
+
+function makeId() {
+  return 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+}
+
+// ═══════════════════════════════════════════════════
+// Call Timer
+// ═══════════════════════════════════════════════════
+let callSeconds = 0, timerHandle = null, callStarted = false;
+
+function startTimer() {
+  if (callStarted) return;
+  callStarted = true;
+  document.getElementById('call-timer').classList.remove('ringing');
+  timerHandle = setInterval(() => {
+    callSeconds++;
+    const m = String(Math.floor(callSeconds / 60)).padStart(2, '0');
+    const s = String(callSeconds % 60).padStart(2, '0');
+    document.getElementById('call-timer').textContent = `${m}:${s}`;
+  }, 1000);
+}
+function stopTimer() { clearInterval(timerHandle); }
+
+// ═══════════════════════════════════════════════════
+// UI State
+// ═══════════════════════════════════════════════════
+let appState = 'idle';
+const STATE_MAP = {
+  idle:      { cls: 's-idle',      icon: '🎤', lbl: 'Tap mic to speak' },
+  listening: { cls: 's-listening', icon: '🔴', lbl: 'Listening…' },
+  thinking:  { cls: 's-thinking',  icon: '⏳', lbl: 'Processing…' },
+  speaking:  { cls: 's-speaking',  icon: '🔊', lbl: 'Agent speaking…' },
+  done:      { cls: 's-done',      icon: '✓',  lbl: 'Call ended' },
+};
+
+function setState(s) {
+  appState = s;
+  const { cls, icon, lbl } = STATE_MAP[s];
+  const btn = document.getElementById('mic-btn');
+  btn.className   = cls;
+  btn.textContent = icon;
+  btn.disabled    = (s === 'done' || s === 'thinking' || s === 'speaking');
+  document.getElementById('status-lbl').textContent = lbl;
+}
+
+// ═══════════════════════════════════════════════════
+// Visualiser
+// ═══════════════════════════════════════════════════
+const BAR_N = 32;
+const visEl = document.getElementById('visualiser');
+const bars  = Array.from({ length: BAR_N }, () => {
+  const b = document.createElement('div');
+  b.className = 'bar'; b.style.height = '3px';
+  visEl.appendChild(b); return b;
+});
+let visFrame = null;
+
+function startVis(analyser) {
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  const step = Math.floor(data.length / BAR_N);
+  function draw() {
+    analyser.getByteFrequencyData(data);
+    bars.forEach((b, i) => {
+      const v = data[i * step] / 255;
+      b.style.height     = Math.max(3, Math.round(v * 28)) + 'px';
+      b.style.background = v > .6 ? '#3b82f6' : v > .3 ? '#60a5fa' : '#1e2535';
+    });
+    visFrame = requestAnimationFrame(draw);
+  }
+  draw();
+}
+function stopVis() {
+  cancelAnimationFrame(visFrame);
+  bars.forEach(b => { b.style.height = '3px'; b.style.background = '#1e2535'; });
+}
+
+// ═══════════════════════════════════════════════════
+// FILLER AUDIO  ← eliminates dead silence instantly
+// Pre-loaded at boot. Plays in <200ms when user stops speaking.
+// ═══════════════════════════════════════════════════
+const fillerCache = {};   // lang → ArrayBuffer
+let fillerAudio   = null;
+let fillerDone    = false;
+let queuedData    = null; // response waiting for filler to finish
+
+async function preloadFillers() {
+  await Promise.all(['ta','en','hi','te'].map(async lang => {
+    try {
+      const r = await fetch(`/filler/${lang}`);
+      fillerCache[lang] = await r.arrayBuffer();
+    } catch {}
+  }));
+}
+
+function playFiller(lang) {
+  fillerDone = false;
+  queuedData = null;
+  const buf = fillerCache[lang] || fillerCache['ta'] || fillerCache['en'];
+  if (!buf) { fillerDone = true; return; }
+
+  const blob = new Blob([buf], { type: 'audio/mpeg' });
+  const url  = URL.createObjectURL(blob);
+  fillerAudio = new Audio(url);
+
+  fillerAudio.onended = () => {
+    URL.revokeObjectURL(url);
+    fillerAudio = null;
+    fillerDone  = true;
+    if (queuedData) {            // response arrived while filler was playing → play now
+      const d  = queuedData;
+      queuedData = null;
+      deliverResponse(d);
+    }
+  };
+  fillerAudio.onerror = () => { fillerDone = true; URL.revokeObjectURL(url); };
+  fillerAudio.play().catch(() => { fillerDone = true; });
+}
+
+function stopFiller() {
+  if (fillerAudio) { fillerAudio.pause(); fillerAudio = null; }
+  fillerDone = true; queuedData = null;
+}
+
+// ═══════════════════════════════════════════════════
+// Recording  (silence detection at 900ms — was 1400ms)
+// ═══════════════════════════════════════════════════
+const SILENCE_THRESH = 0.008;
+const SILENCE_MS     = 900;     // ← faster reaction
+const MAX_REC_MS     = 12000;
+
+let mediaRecorder = null, audioChunks = [], silenceTimer = null, maxTimer = null, audioCtx = null;
+
+async function startRecording() {
+  if (sessionDone) return;
+  if (appState === 'listening') { stopRecording(); return; }
+  if (appState !== 'idle') return;
+
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false }); }
+  catch { alert('Mic access denied — please allow mic and reload.'); return; }
+
+  audioCtx = new AudioContext();
+  const src = audioCtx.createMediaStreamSource(stream);
+  const analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 256;
+  src.connect(analyser);
+  startVis(analyser);
+
+  const rmsData = new Float32Array(analyser.fftSize);
+  let hadSound  = false;
+  silenceTimer  = null;
+
+  function checkSilence() {
+    if (!mediaRecorder || mediaRecorder.state !== 'recording') return;
+    analyser.getFloatTimeDomainData(rmsData);
+    let sum = 0; for (const v of rmsData) sum += v * v;
+    const rms = Math.sqrt(sum / rmsData.length);
+    if (rms > SILENCE_THRESH) {
+      hadSound = true;
+      clearTimeout(silenceTimer); silenceTimer = null;
+    } else if (hadSound && !silenceTimer) {
+      silenceTimer = setTimeout(stopRecording, SILENCE_MS);
+    }
+    requestAnimationFrame(checkSilence);
+  }
+  requestAnimationFrame(checkSilence);
+
+  const mime = ['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg']
+    .find(m => MediaRecorder.isTypeSupported(m)) || '';
+  mediaRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
+  audioChunks   = [];
+
+  mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+  mediaRecorder.onstop = async () => {
+    clearTimeout(silenceTimer); clearTimeout(maxTimer);
+    stopVis();
+    stream.getTracks().forEach(t => t.stop());
+    audioCtx.close(); audioCtx = null;
+    document.getElementById('interim-wrap').textContent = '';
+    const usedMime = mediaRecorder.mimeType || 'audio/webm';
+    const blob = new Blob(audioChunks, { type: usedMime.split(';')[0] });
+    if (blob.size < 800) { setState('idle'); return; }
+    await processAudio(blob, usedMime);
+  };
+
+  maxTimer = setTimeout(stopRecording, MAX_REC_MS);
+  mediaRecorder.start(200);
+  setState('listening');
+  document.getElementById('interim-wrap').textContent = 'Speak now…';
+  setTimeout(() => {
+    if (appState === 'listening')
+      document.getElementById('interim-wrap').textContent = '';
+  }, 900);
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+}
+
+// ═══════════════════════════════════════════════════
+// Pipeline: filler plays instantly → Whisper → GPT → TTS stream
+// ═══════════════════════════════════════════════════
+async function processAudio(blob, mime) {
+  // ① Play filler IMMEDIATELY — user hears response within 200ms
+  playFiller(lastLang);
+  setState('thinking');
+
+  const ext  = (mime.split('/')[1] || 'webm').split(';')[0];
+  const form = new FormData();
+  form.append('file', blob, `audio.${ext}`);
+
+  try {
+    // ② Whisper STT
+    const r1   = await fetch('/transcribe', { method: 'POST', body: form });
+    const text = ((await r1.json()).text || '').trim();
+    if (!text) { stopFiller(); setState('idle'); setTimeout(startRecording, 400); return; }
+    addBubble('user', text);
+
+    // ③ Chat LLM
+    const r2   = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, message: text }),
+    });
+    const data = await r2.json();
+    lastLang   = data.lang || lastLang;
+    addBubble('agent', data.reply);
+    updateBadges(data.lang, data.emotion, data.phase);
+    updateLead(data.lead);
+
+    // ④ If filler still playing → queue response; filler's onended will trigger it
+    //    If filler already done  → play response immediately
+    if (!fillerDone) {
+      queuedData = data;
+    } else {
+      deliverResponse(data);
+    }
+  } catch (err) {
+    console.error(err);
+    stopFiller();
+    setState('idle');
+  }
+}
+
+function deliverResponse(data) {
+  if (data.done) {
+    sessionDone = true;
+    playTTSStream(data.reply, () => {
+      setState('done');
+      stopTimer();
+      document.getElementById('done-banner').style.display = 'block';
+    });
+  } else {
+    playTTSStream(data.reply, () => {
+      setState('idle');
+      setTimeout(startRecording, 350);
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// Greet — REST fallback (used only when Pipecat WS fails)
+// ═══════════════════════════════════════════════════
+async function greetUser() {
+  setState('thinking');
+  try {
+    const r    = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, message: '__start__' }),
+    });
+    const data = await r.json();
+    lastLang   = data.lang || 'ta';
+    addBubble('agent', data.reply);
+    updateBadges(data.lang, data.emotion, data.phase);
+    deliverResponse(data);
+  } catch { setState('idle'); }
+}
+
+// ═══════════════════════════════════════════════════
+// Pipecat mode — answer call via WebSocket pipeline
+// Falls back to REST greetUser() if WebSocket fails
+// ═══════════════════════════════════════════════════
+async function startPipecatCall() {
+  setState('thinking');
+  try {
+    pcClient = new PipecatVoiceClient(sessionId, (msg) => {
+      // Pipecat agent_data arrives here for every agent turn
+      lastLang = msg.lang || lastLang;
+      if (msg.transcript) addBubble('user',  msg.transcript);
+      if (msg.reply)      addBubble('agent', msg.reply);
+      updateBadges(msg.lang, msg.emotion, msg.phase);
+      updateLead(msg.lead);
+      if (msg.done) {
+        sessionDone = true;
+        setState('done');
+        stopTimer();
+        document.getElementById('done-banner').style.display = 'block';
+      }
+    });
+    await pcClient.connect();
+    // Pipecat pipeline sends greeting automatically via StartFrame
+    setState('listening');
+    document.getElementById('status-lbl').textContent = 'Listening…';
+    // In Pipecat mode the mic button becomes mute/unmute
+    document.getElementById('mic-btn').title = 'Mute / unmute';
+  } catch (err) {
+    console.warn('Pipecat WebSocket failed, falling back to REST mode:', err);
+    if (pcClient) { pcClient.cleanup(); pcClient = null; }
+    await greetUser();
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// TTS — Coqui returns audio/wav (blob), OpenAI/ElevenLabs returns audio/mpeg
+// Simple blob approach works for both — no MediaSource needed for local TTS
+// ═══════════════════════════════════════════════════
+let currentAudio = null;
+
+async function playTTSStream(text, onEnd) {
+  setState('speaking');
+  if (currentAudio) { try { currentAudio.pause(); } catch {} currentAudio = null; }
+
+  try {
+    const resp = await fetch('/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, lang: lastLang }),  // lang drives Coqui language
+    });
+    if (!resp.ok) { if (onEnd) onEnd(); return; }
+
+    const ctype = resp.headers.get('content-type') || 'audio/mpeg';
+
+    // Coqui (audio/wav) is local — full blob arrives fast, blob approach is fine
+    // OpenAI/ElevenLabs (audio/mpeg) — use MediaSource for streaming start
+    if (ctype.includes('wav')) {
+      // WAV blob — play directly
+      const url = URL.createObjectURL(await resp.blob());
+      currentAudio = new Audio(url);
+      currentAudio.onended = () => { URL.revokeObjectURL(url); currentAudio = null; if (onEnd) onEnd(); };
+      currentAudio.onerror = () => { URL.revokeObjectURL(url); currentAudio = null; if (onEnd) onEnd(); };
+      currentAudio.play();
+    } else if ('MediaSource' in window && MediaSource.isTypeSupported('audio/mpeg')) {
+      // MP3 streaming — audio starts on first chunk
+      const ms = new MediaSource();
+      const aud = new Audio();
+      aud.src = URL.createObjectURL(ms);
+      currentAudio = aud;
+
+      ms.addEventListener('sourceopen', async () => {
+        let sb;
+        try { sb = ms.addSourceBuffer('audio/mpeg'); }
+        catch { await _blobPlay(resp, onEnd); return; }
+
+        aud.play().catch(() => {});
+        const appendChunk = chunk => new Promise(res => {
+          const go = () => {
+            if (sb.updating) sb.addEventListener('updateend', go, { once: true });
+            else { sb.appendBuffer(chunk); sb.addEventListener('updateend', res, { once: true }); }
+          };
+          go();
+        });
+        try {
+          const reader = resp.body.getReader();
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) {
+              const end = () => { try { ms.endOfStream(); } catch {} };
+              sb.updating ? sb.addEventListener('updateend', end, { once: true }) : end();
+              break;
+            }
+            await appendChunk(value);
+          }
+        } catch {}
+      }, { once: true });
+
+      aud.onended = () => { try { URL.revokeObjectURL(aud.src); } catch {} currentAudio = null; if (onEnd) onEnd(); };
+      aud.onerror = () => { try { URL.revokeObjectURL(aud.src); } catch {} currentAudio = null; if (onEnd) onEnd(); };
+    } else {
+      await _blobPlay(resp, onEnd);
+    }
+  } catch { if (onEnd) onEnd(); }
+}
+
+async function _blobPlay(resp, onEnd) {
+  const url = URL.createObjectURL(await resp.blob());
+  currentAudio = new Audio(url);
+  currentAudio.onended = () => { URL.revokeObjectURL(url); currentAudio = null; if (onEnd) onEnd(); };
+  currentAudio.onerror = () => { URL.revokeObjectURL(url); currentAudio = null; if (onEnd) onEnd(); };
+  currentAudio.play();
+}
+
+// ═══════════════════════════════════════════════════
+// PDF Knowledge Base upload
+// ═══════════════════════════════════════════════════
+document.getElementById('pdf-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('pdf-name').textContent = file.name;
+  document.getElementById('pdf-status').style.display = 'none';
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const resp = await fetch('/upload-pdf', { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (resp.ok) {
+      const st = document.getElementById('pdf-status');
+      const co = data.company || {};
+      const coName = co.name || '';
+      st.textContent = `✓ ${data.pages} page${data.pages!==1?'s':''}, ${data.chunks||'?'} chunks indexed` + (coName ? ` — ${coName}` : '');
+      st.style.color = '#4ade80';
+      st.style.display = 'block';
+      document.getElementById('pdf-label').style.borderColor = '#16a34a';
+      // Refresh header with company info from PDF
+      if (co.name)       { document.getElementById('h-company').textContent = co.name; document.title = co.name; }
+      if (co.tagline)    { document.getElementById('h-tagline').textContent = co.tagline; }
+      if (co.agent_name) { document.getElementById('cs-agent').textContent = `Agent: ${co.agent_name}`; }
+    } else {
+      document.getElementById('pdf-status').textContent = '✗ ' + (data.error || 'Upload failed');
+      document.getElementById('pdf-status').style.color = '#f87171';
+      document.getElementById('pdf-status').style.display = 'block';
+    }
+  } catch {
+    document.getElementById('pdf-status').textContent = '✗ Network error';
+    document.getElementById('pdf-status').style.color = '#f87171';
+    document.getElementById('pdf-status').style.display = 'block';
+  }
+});
+
+// ═══════════════════════════════════════════════════
+// End call / New call
+// ═══════════════════════════════════════════════════
+document.getElementById('answer-btn').addEventListener('click', async () => {
+  document.getElementById('call-screen').style.display = 'none';
+  startTimer();
+  await startPipecatCall();   // Pipecat WebSocket → falls back to REST if unavailable
+});
+
+document.getElementById('end-btn').addEventListener('click', () => {
+  stopFiller();
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  // Tear down Pipecat WebSocket if active
+  if (pcClient) { pcClient.cleanup(); pcClient = null; }
+  stopRecording(); stopTimer();
+  sessionDone = true;
+  setState('done');
+  document.getElementById('done-banner').style.display = 'block';
+  fetch(`/session/${sessionId}`, { method: 'DELETE' }).catch(() => {});
+});
+
+document.getElementById('new-btn').addEventListener('click', async () => {
+  await fetch(`/session/${sessionId}`, { method: 'DELETE' }).catch(() => {});
+  stopFiller();
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  // Tear down Pipecat WebSocket if active
+  if (pcClient) { pcClient.cleanup(); pcClient = null; }
+  stopRecording(); stopTimer();
+
+  sessionId = makeId(); sessionDone = false; lastLang = 'ta';
+  callSeconds = 0; callStarted = false;
+  document.getElementById('call-timer').textContent = '00:00';
+  document.getElementById('call-timer').classList.add('ringing');
+  document.getElementById('transcript').innerHTML      = '';
+  document.getElementById('done-banner').style.display = 'none';
+  document.getElementById('interim-wrap').textContent  = '';
+  document.getElementById('lang-badge').textContent    = 'TA';
+  document.getElementById('emotion-badge').textContent = 'Neutral';
+  document.getElementById('phase-badge').textContent   = 'Greeting';
+  ['l-name','l-req','l-phone','l-budget'].forEach(id => setField(id, null));
+  document.getElementById('cs-status').textContent = 'Incoming call...';
+  document.getElementById('call-screen').style.display = 'flex';
+  setState('idle');
+});
+
+document.getElementById('mic-btn').addEventListener('click', () => {
+  if (pcClient && pcClient.micStream) {
+    // Pipecat mode: toggle mic mute
+    const track = pcClient.micStream.getAudioTracks()[0];
+    if (track) {
+      track.enabled = !track.enabled;
+      document.getElementById('mic-btn').textContent = track.enabled ? '🎤' : '🔇';
+      document.getElementById('status-lbl').textContent = track.enabled ? 'Listening…' : 'Muted';
+    }
+  } else {
+    // REST fallback mode: push-to-talk
+    startRecording();
+  }
+});
+
+// ═══════════════════════════════════════════════════
+// UI helpers
+// ═══════════════════════════════════════════════════
+function addBubble(who, text) {
+  const wrap = document.createElement('div');
+  wrap.className = `bubble-wrap ${who}`;
+  const lbl = document.createElement('div');
+  lbl.className   = 'bubble-label';
+  lbl.textContent = who === 'agent' ? CFG.agent_name : 'Customer';
+  const bub = document.createElement('div');
+  bub.className   = `bubble ${who}`;
+  bub.textContent = text;
+  wrap.appendChild(lbl); wrap.appendChild(bub);
+  const t = document.getElementById('transcript');
+  t.appendChild(wrap); t.scrollTop = t.scrollHeight;
+}
+
+const LANG_MAP  = { en:'EN', ta:'TA', hi:'HI', te:'TE' };
+const PHASE_MAP = { greeting:'Greeting', explore:'Exploring', recommend:'Recommending', collect:'Collecting', confirm:'Confirming', close:'Closing' };
+function updateBadges(lang, emotion, phase) {
+  document.getElementById('lang-badge').textContent    = LANG_MAP[lang] || (lang||'EN').toUpperCase();
+  document.getElementById('emotion-badge').textContent = cap(emotion || 'neutral');
+  if (phase) document.getElementById('phase-badge').textContent = PHASE_MAP[phase] || cap(phase);
+}
+function updateLead(lead) {
+  if (!lead) return;
+  setField('l-name',   lead.name);
+  setField('l-req',    lead.requirement);
+  setField('l-phone',  lead.phone);
+  setField('l-budget', lead.budget);
+}
+function setField(id, val) {
+  const el = document.getElementById(id);
+  if (val && val !== 'null') { el.textContent = val; el.classList.remove('empty'); }
+  else { el.textContent = '—'; el.classList.add('empty'); }
+}
+function cap(s) { return s ? s[0].toUpperCase() + s.slice(1) : ''; }
+
+// ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+// Setup screen — PDF upload + start call
+// ═══════════════════════════════════════════════════
+(function initSetupScreen() {
+  const setupScreen  = document.getElementById('setup-screen');
+  const callScreen   = document.getElementById('call-screen');
+  const pdfInput     = document.getElementById('setup-pdf-input');
+  const uploadZone   = document.getElementById('setup-upload-zone');
+  const uploadIcon   = document.getElementById('setup-upload-icon');
+  const uploadText   = document.getElementById('setup-upload-text');
+  const pdfStatus    = document.getElementById('setup-pdf-status');
+  const coPreview    = document.getElementById('setup-company-preview');
+  const startBtn     = document.getElementById('setup-start-btn');
+  const skipBtn      = document.getElementById('setup-skip-btn');
+
+  function showCallScreen() {
+    setupScreen.style.display = 'none';
+    callScreen.style.display  = 'flex';
+  }
+
+  // PDF upload from setup screen
+  pdfInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    uploadText.textContent  = file.name;
+    pdfStatus.textContent   = 'Uploading…';
+    pdfStatus.style.color   = '#94a3b8';
+
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const resp = await fetch('/upload-pdf', { method: 'POST', body: fd });
+      const data = await resp.json();
+      if (resp.ok) {
+        const co = data.company || {};
+        uploadZone.classList.add('loaded');
+        uploadIcon.textContent = '✅';
+        pdfStatus.textContent  = `${data.chunks || data.pages} chunks indexed`;
+        pdfStatus.style.color  = '#4ade80';
+
+        // Show extracted company info
+        document.getElementById('setup-co-name').textContent     = co.name     || '—';
+        document.getElementById('setup-co-agent').textContent    = co.agent_name || '—';
+        document.getElementById('setup-co-services').textContent = co.services  || '—';
+        coPreview.style.display = 'block';
+
+        // Also sync header (already wired in sidebar handler)
+        if (co.name)       { document.getElementById('h-company').textContent = co.name; document.title = co.name; }
+        if (co.tagline)    document.getElementById('h-tagline').textContent  = co.tagline;
+        if (co.agent_name) document.getElementById('cs-agent').textContent   = `Agent: ${co.agent_name}`;
+
+        startBtn.textContent = `Start Call with ${co.name || 'Agent'} →`;
+      } else {
+        pdfStatus.textContent = '✗ ' + (data.error || 'Upload failed');
+        pdfStatus.style.color = '#f87171';
+      }
+    } catch {
+      pdfStatus.textContent = '✗ Network error';
+      pdfStatus.style.color = '#f87171';
+    }
+  });
+
+  startBtn.addEventListener('click', showCallScreen);
+  skipBtn.addEventListener('click',  showCallScreen);
+})();
+
+// ═══════════════════════════════════════════════════
+// Boot — load config + pre-warm fillers in parallel
+// ═══════════════════════════════════════════════════
+Promise.all([loadConfig(), preloadFillers()]);
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(python -c \"from app.services.agent_service import AgentService; from app.services.db_service import DBService; print\\('imports OK'\\)\")",
+      "Bash(uvicorn app.main:app --reload --host 0.0.0.0 --port 8000)",
+      "Bash(python3 -m uvicorn --version)",
+      "Bash(python3 -c \"import fastapi; print\\(fastapi.__version__\\)\")",
+      "Bash(python3 -m pip install -r requirements.txt)",
+      "Read(//c/Users/draj5/AppData/Local/Python/pythoncore-3.14-64/Lib/site-packages/pipecat/audio/vad//**)",
+      "Read(//c/Users/draj5/AppData/Local/Python/pythoncore-3.14-64/Lib/site-packages/pipecat/audio/vad/**)"
+    ]
+  }
+}

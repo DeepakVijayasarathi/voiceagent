@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/draj5/AppData/Local/Python/pythoncore-3.14-64/Lib/site-packages/pipecat//**)",
+      "Bash(python -c ' *)"
+    ]
+  }
+}
